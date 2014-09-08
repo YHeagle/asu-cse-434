@@ -73,7 +73,7 @@ int main(int argc, char** argv)
         /* Print log messages. */
         if (message_size != sizeof(request_t)) {
             /* Received message is invalid. Print a message then ignore and return to listening. */
-            printf("WARNING: Invalid request from %s (invalid size).\n", client_ip_str);
+            printf("ERROR: Invalid request from %s (invalid size).\n", client_ip_str);
         } else {
             printf("INFO: Handling request from %s.\n", client_ip_str);
 
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
                 if (sendto(sock, response, sizeof(response_t), 0,
                     (struct sockaddr *) &client_address, sizeof(client_address)) != sizeof(response_t))
                     fail_with_error("FATAL: sendto() sent a different number of bytes than expected");
-                printf("INFO: Sent response to %s.\n", client_ip_str);
+                printf("    INFO: Sent response to %s.\n", client_ip_str);
             }
         }
     }
@@ -120,24 +120,24 @@ response_t *handle_request(request_t *request)
         return (response_t*)0;
 
     if ((int)request->incarnation != client->last_incarn) {
-        printf("WARNING: Client incarnation number has changed.\n");
+        printf("    WARNING: Client incarnation number has changed.\n");
         clear_locks(client);
         client->last_incarn = (int)request->incarnation;
     }
 
     if (request->request < client->last_request) {
         /* Request has already been completed. */
-        printf("WARNING: Request has already been completed.\nRequest ignored.\n");
+        printf("    WARNING: Request has already been completed.\nRequest ignored.\n");
         return (response_t*)0;
 
     } else if (request->request == client->last_request) {
         /* Request has already been completed but send stored response. */
-        printf("WARNING: Request has already been completed. Sending stored response.\n");
+        printf("    WARNING: Request has already been completed. Sending stored response.\n");
         return client->last_response;
 
     } else {
         /* Request number is higher than previous. This is a new request. */
-        printf("INFO: Request is new.\n");
+        printf("    INFO: Request is new.\n");
 
         /* Generate a random number to decide between the 3 options. */
         /* FIXME */
@@ -146,16 +146,16 @@ response_t *handle_request(request_t *request)
 
         if (rnd == 0) {
             /* Drop the request. */
-            printf("INFO: Dropping the request.\n");
+            printf("    INFO: Dropping the request.\n");
             return (response_t*)0;
 
         } else {
             if (rnd == 1) {
                 /* Perform the request but drop the response. */
-                printf("INFO: Performing the request but dropping the reply.\n");
+                printf("    INFO: Performing the request but dropping the reply.\n");
             } else {
                 /* Perform the request. */
-                printf("INFO: Performing the request.\n");
+                printf("    INFO: Performing the request.\n");
             }
 
             dispatch_request(request, client);
@@ -184,7 +184,7 @@ client_t *retrieve_client(request_t *request)
         /* Match on machine name and client number. */
         if (strcmp(req_machine, client->machine) == 0 && req_id == client->id) {
             found = 1;
-            printf("INFO: Found record for machine=\"%s\" and client=%d\n", req_machine, req_id);
+            printf("    INFO: Found record for machine=\"%s\" and client=%d.\n", req_machine, req_id);
             break;
         }
     }
@@ -201,7 +201,7 @@ client_t *retrieve_client(request_t *request)
         client->last_incarn = request->incarnation;
         client->last_response = (response_t*)0;
         list_append(&client_list, client);
-        printf("INFO: Created new record for machine=\"%s\" and client=%d\n", req_machine, req_id);
+        printf("    INFO: Created new record for machine=\"%s\" and client=%d.\n", req_machine, req_id);
     }
 
     return client;
@@ -211,7 +211,7 @@ client_t *retrieve_client(request_t *request)
 /* Called when the incarnation number for client has incremented. */
 void clear_locks(client_t *client)
 {
-    printf("INFO: Clearing locks held by machine=\"%s\" and client=%d\n", client->machine, client->id);
+    printf("    INFO: Clearing locks held by machine=\"%s\" and client=%d.\n", client->machine, client->id);
 
     /* Iterate through all files on the system. */
     for (int i = 0, end = file_list.size; i < end; ++i) {
@@ -222,7 +222,7 @@ void clear_locks(client_t *client)
             if (client == file->writeholder) {
                 file->lock = LOCK_UNLOCKED;
                 file->writeholder = (void*)0;
-                printf("INFO: Cleared write lock on file %s\n", file->filename);
+                printf("    INFO: Cleared write lock on file %s.\n", file->filename);
             }
 
         } else if (file->lock == LOCK_READ) {
@@ -234,7 +234,7 @@ void clear_locks(client_t *client)
                 if (client == readclient) {
                     /* Remove the readlock that this client holds. */
                     list_remove(&(file->readholders), j);
-                    printf("INFO: Cleared read lock on file %s\n", file->filename);
+                    printf("    INFO: Cleared read lock on file %s.\n", file->filename);
                     break;
                 }
             }
@@ -255,6 +255,7 @@ response_t *dispatch_request(request_t *request, client_t *client)
     /* Scan the command from the operation string. */
     char command[20];
     sscanf(request->operation, "%s", command);
+    printf("    INFO: Requested operation => %s\n", request->operation);
 
     response_t *response;
 
@@ -270,7 +271,7 @@ response_t *dispatch_request(request_t *request, client_t *client)
         response = perform_lseek(request, client);
     } else {
         /* Received an invalid request. */
-        printf("The requested operation is invalid.\n");
+        printf("    ERROR: The requested operation is invalid.\n");
         response = resp_from_status(EINVAL);
     }
 
@@ -298,15 +299,15 @@ response_t *perform_open(request_t *request, client_t* client)
         mode = LOCK_READ | LOCK_WRITE;
     } else {
         /* Received an invalid value for the mode argument. */
-        printf("WARNING: Received invalid value for the mode argument.\n");
+        printf("    ERROR: Received invalid value for the mode argument.\n");
         return resp_from_status(EINVAL);
     }
 
     if (file) {
         /* Verify that this client does not already have this file open. */
-        if (check_open(client, file, LOCK_READ) || check_open(client, file, LOCK_WRITE)) {
+        if (check_open(client, file, LOCK_READ | LOCK_WRITE)) {
             /* Can't open the same file again. */
-            printf("WARNING: Client already has %s open.\n", filename);
+            printf("    ERROR: Client already has %s open.\n", filename);
             return resp_from_status(EINVAL);
         }
 
@@ -345,9 +346,9 @@ response_t *perform_open(request_t *request, client_t* client)
 
         if (response->status == 0) {
             /* Request was successful. */
-            printf("INFO: Opened %s in %s mode.\n", filename, strmode);
+            printf("    INFO: Opened %s in %s mode.\n", filename, strmode);
         } else {
-            printf("WARNING: Existing locks prevent opening %s in %s mode.\n", filename, strmode);
+            printf("    ERROR: Existing locks prevent opening %s in %s mode.\n", filename, strmode);
         }
 
     } else {
@@ -358,17 +359,17 @@ response_t *perform_open(request_t *request, client_t* client)
             set_lock(file, client, LOCK_WRITE);
             add_fstate(client, file, mode, 0);
 
-            /* Create file on disk. */
-            int fd = open_file(file, O_WRONLY | O_CREAT, (mode_t)00644);
+            /* Create file on disk by opening then closing the file. */
+            int fd = open_disk_file(file, O_WRONLY | O_CREAT, (mode_t)00644);
             if (close(fd) < 0)
                 fail_with_error("FATAL: close() failed");
 
             response = resp_from_status(0);
-            printf("INFO: Created new file %s in mode %s.\n", filename, strmode);
+            printf("    INFO: Created new file %s in mode %s.\n", filename, strmode);
 
         } else {
             response = resp_from_status(ENOENT);
-            printf("WARNING: File does not exist and read mode requested.\n");
+            printf("    ERROR: File does not exist and read mode requested.\n");
         }
     }
 
@@ -411,7 +412,77 @@ file_entry_t *new_file(char *filename, char *machine)
 /* Performs the close operation. */
 response_t *perform_close(request_t *request, client_t *client)
 {
-    return 0;
+    char filename[24];
+    response_t *response;
+
+    sscanf(request->operation, "%*s %s", filename);
+    file_entry_t *file = find_file(filename, request->machine);
+
+    if (file) {
+        if (check_open(client, file, LOCK_READ | LOCK_WRITE)) {
+            /* File exists and client has file open. Operation can be performed.
+            Need to remove fstate from client struct and client from holding a
+            lock on the file. */
+            char found = 0;
+            for (int i = 0, end = client->fstates.size; i < end; ++i) {
+                file_state_t *fstate = (file_state_t*)list_at(&client->fstates, i);
+                if (fstate->file == file) {
+                    list_remove(&client->fstates, i);
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (!found) {
+                printf("FATAL: Internal data structure inconsistency (%s:%d).\n", __FILE__, __LINE__);
+                exit(1);
+            }
+
+            /* File must either have a read or write lock since this client
+            has it open. */
+            if (file->lock == LOCK_WRITE) {
+                file->writeholder = (client_t*)0;
+                file->lock = LOCK_UNLOCKED;
+
+            } else {
+                /* File must have a read lock. */
+                found = 0;
+                for (int i = 0, end = file->readholders.size; i < end; ++i) {
+                    client_t *c = (client_t*)list_at(&file->readholders, i);
+                    if (c == client) {
+                        list_remove(&file->readholders, i);
+                        found = 1;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    printf("FATAL: Internal data structure inconsistency (%s:%d).\n", __FILE__, __LINE__);
+                    exit(1);
+                }
+
+                if (file->readholders.size == 0) {
+                    /* We just removed the last client holding a read lock on the file.
+                    The file is now unlocked. */
+                    file->lock = LOCK_UNLOCKED;
+                }
+            }
+
+            response = resp_from_status(0);
+            printf("Closed %s.\n", file->filename);
+
+        } else {
+            /* File exists but client does not have file open. */
+            printf("    ERROR: File exists but not opened by client.\n");
+            response = resp_from_status(EINVAL);
+        }
+    } else {
+        /* File does not exist. */
+        printf("    ERROR: File does not exist.\n");
+        response = resp_from_status(ENOENT);
+    }
+
+    return response;
 }
 
 /* Performs the read operation. */
@@ -478,7 +549,7 @@ char check_open(client_t* client, file_entry_t* file, lock_t mode)
 
 /* Computes the filename of the specified file on the local disk,
 and opens that file. */
-int open_file(file_entry_t *file, int flags, mode_t mode)
+int open_disk_file(file_entry_t *file, int flags, mode_t mode)
 {
     char disk_filename[50];
     strcpy(disk_filename, file->machine);

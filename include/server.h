@@ -113,6 +113,6 @@ file_entry_t *new_file(char *filename, char *machine);
 
 /* Computes the filename of the specified file on the local disk,
 and opens that file. */
-int open_file(file_entry_t *file, int flags, mode_t mode);
+int open_disk_file(file_entry_t *file, int flags, mode_t mode);
 
 #endif /* SERVER_H */
