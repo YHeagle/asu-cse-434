@@ -14,8 +14,8 @@
 int main(int argc, char **argv)
 {
 	/* Check number of arguments. */
-	if (argc != 6) {
-		fprintf(stderr, "usage: %s <SERVER IP> <MACHINE> <CLIENT ID> <SERVER PORT> <SCRIPT PATH>\n", argv[0]);
+	if (argc != 7) {
+		fprintf(stderr, "usage: %s <SERVER IP> <MACHINE> <CLIENT ID> <SERVER PORT> <OPERATION> <REQUEST>\n", argv[0]);
 		exit(1);
 	}
 
@@ -32,7 +32,9 @@ int main(int argc, char **argv)
 
 	request_t request;
 	strcpy(request.machine, argv[2]);
+	strcpy(request.operation, argv[5]);
 	request.client = atoi(argv[3]);
+	request.request = atoi(argv[6]);
 
 	if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                &server_address, sizeof(server_address)) != sizeof(request_t))
