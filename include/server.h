@@ -115,4 +115,8 @@ file_entry_t *new_file(char *filename, char *machine);
 and opens that file. */
 int open_disk_file(file_entry_t *file, int flags, mode_t mode);
 
+/* Finds the record for the client's file state for the given
+file. */
+file_state_t *find_fstate(client_t *client, file_entry_t *file);
+
 #endif /* SERVER_H */

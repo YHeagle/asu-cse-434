@@ -125,15 +125,17 @@ response_t *handle_request(request_t *request)
         client->last_incarn = (int)request->incarnation;
     }
 
+    response_t *response;
+
     if (request->request < client->last_request) {
         /* Request has already been completed. */
         printf("    WARNING: Request has already been completed.\nRequest ignored.\n");
-        return (response_t*)0;
+        response = (response_t*)0;
 
     } else if (request->request == client->last_request) {
         /* Request has already been completed but send stored response. */
         printf("    WARNING: Request has already been completed. Sending stored response.\n");
-        return client->last_response;
+        response = client->last_response;
 
     } else {
         /* Request number is higher than previous. This is a new request. */
@@ -147,7 +149,7 @@ response_t *handle_request(request_t *request)
         if (rnd == 0) {
             /* Drop the request. */
             printf("    INFO: Dropping the request.\n");
-            return (response_t*)0;
+            response = (response_t*)0;
 
         } else {
             if (rnd == 1) {
@@ -158,15 +160,24 @@ response_t *handle_request(request_t *request)
                 printf("    INFO: Performing the request.\n");
             }
 
-            dispatch_request(request, client);
+            /* Perform the request. */
+            response = dispatch_request(request, client);
+            if (client->last_response)
+                free(client->last_response);
+            client->last_response = response;
+
+            if (rnd == 1) {
+                /* Drop reply. */
+                response = (response_t*)0;
+            }
 
         }
 
+        /* Set the last request number. */
         client->last_request = request->request;
     }
 
-    /* FIXME */
-    return (response_t*)0;
+    return response;
 }
 
 /* Retrieves the client structure associated with a client or constructs a new one. */
@@ -488,19 +499,148 @@ response_t *perform_close(request_t *request, client_t *client)
 /* Performs the read operation. */
 response_t *perform_read(request_t *request, client_t *client)
 {
-    return 0;
+    char filename[24];
+    int numbytes;
+    response_t *response;
+
+    sscanf(request->operation, "%*s %s %d", filename, &numbytes);
+    file_entry_t *file = find_file(filename, request->machine);
+
+    if (!file) {
+        /* File does not exist. */
+        printf("    ERROR: File does not exist.\n");
+        return resp_from_status(EINVAL);
+    }
+
+    /* Check that the client has the file open in the correct
+    mode. */
+    if (!check_open(client, file, LOCK_READ)) {
+        /* File exists but not opened by client (or not in right mode). */
+        printf("    ERROR: Client does not have file open in correct mode.\n");
+        return resp_from_status(EINVAL);
+    }
+
+    /* Check if number of bytes to be read is valid. */
+    if (numbytes <= 0 || numbytes > 80) {
+        printf("    ERROR: Invalid number of bytes to read (%d).\n", numbytes);
+        return resp_from_status(EINVAL);
+    }
+    /* Everything is correct, we can perform the read.
+    mode argument is not needed. */
+    int fd = open_disk_file(file, O_RDONLY, 0);
+    
+    file_state_t *fstate = find_fstate(client, file);
+    if (fstate->position != 0)
+        lseek(fd, fstate->position, SEEK_SET);
+
+    response = resp_from_status(0);
+    size_t size = read(fd, &response->result, numbytes);
+    if (size < 0) {
+        response->status = errno;
+        response->size = 0;
+    } else {
+        response->size = size;
+    }
+
+    size_t position = lseek(fd, 0, SEEK_CUR);
+    if (position < 0)
+        fail_with_error("FATAL: lseek() failed");
+
+    fstate->position = position;
+
+    if (close(fd) < 0)
+        fail_with_error("FATAL: close() failed");
+
+    printf("    INFO: Performed read.\n");
+    return response;
 }
 
 /* Performs the write operation. */
 response_t *perform_write(request_t *request, client_t *client)
 {
-    return 0;
+    char filename[24];
+    char data[80];
+    memset(data, 0, sizeof(data));
+    response_t *response;
+
+    sscanf(request->operation, "%*s %s %80c", filename, data);
+    file_entry_t *file = find_file(filename, request->machine);
+
+    if (!file) {
+        /* File does not exist. */
+        printf("    ERROR: File does not exist.\n");
+        return resp_from_status(EINVAL);
+    }
+
+    /* Check that the client has the file open in the correct
+    mode. */
+    if (!check_open(client, file, LOCK_WRITE)) {
+        /* File exists but not opened by client (or not in right mode). */
+        printf("    ERROR: Client does not have file open in correct mode.\n");
+        return resp_from_status(EINVAL);
+    }
+
+    /* Everything is correct, we can perform the write.
+    mode argument is not needed. */
+    int fd = open_disk_file(file, O_WRONLY, 0);
+    
+    file_state_t *fstate = find_fstate(client, file);
+    if (fstate->position != 0)
+        lseek(fd, fstate->position, SEEK_SET);
+
+    response = resp_from_status(0);
+    size_t size = write(fd, data, strlen(data));
+    if (size < 0) {
+        response->status = errno;
+        response->size = 0;
+    } else {
+        response->size = size;
+    }
+
+    size_t position = lseek(fd, 0, SEEK_CUR);
+    if (position < 0)
+        fail_with_error("FATAL: lseek() failed");
+
+    fstate->position = position;
+
+    if (close(fd) < 0)
+        fail_with_error("FATAL: close() failed");
+
+    printf("    INFO: Performed write.\n");
+    return response;
 }
 
 /* Performs the lseek operation. */
 response_t *perform_lseek(request_t *request, client_t *client)
 {
-    return 0;
+    char filename[24];
+    int position;
+
+    sscanf(request->operation, "%*s %s %d", filename, &position);
+    file_entry_t *file = find_file(filename, request->machine);
+
+    if (!file) {
+        /* File does not exist. */
+        printf("    ERROR: File does not exist.\n");
+        return resp_from_status(EINVAL);
+    }
+
+    /* Check that the client has the file open in the correct
+    mode. */
+    if (!check_open(client, file, LOCK_WRITE)) {
+        /* File exists but not opened by client (or not in right mode). */
+        printf("    ERROR: Client does not have file open in correct mode.\n");
+        return resp_from_status(EINVAL);
+    }
+
+    /* Don't actually open file, just change the position recorded
+    in the client's fstates table. */
+
+    file_state_t *fstate = find_fstate(client, file);
+    fstate->position = position;
+
+    printf("    INFO: Performed lseek.\n");
+    return resp_from_status(0);
 }
 
 /* Generates a response with the given status code, and 0 for the
@@ -513,7 +653,7 @@ response_t *resp_from_status(int status)
 }
 
 /* Finds the file entry with the given filename and machine name. */
-file_entry_t *find_file(char *filename, char*machine)
+file_entry_t *find_file(char *filename, char *machine)
 {
     char found = 0;
     file_entry_t *file;
@@ -535,16 +675,13 @@ file_entry_t *find_file(char *filename, char*machine)
 }
 
 /* Checks whether the given client has the given file open with the specified mode. */
-char check_open(client_t* client, file_entry_t* file, lock_t mode)
+char check_open(client_t *client, file_entry_t *file, lock_t mode)
 {
-    for (int i = 0, end = client->fstates.size; i < end; ++i) {
-        file_state_t *fstate = (file_state_t*)list_at(&client->fstates, i);
-        if (file == fstate->file) {
-            return mode & fstate->mode;
-        }
-    }
-
-    return 0;
+    file_state_t *fstate = find_fstate(client, file);
+    if (fstate && (fstate->mode & mode))
+        return 1;
+    else
+        return 0;
 }
 
 /* Computes the filename of the specified file on the local disk,
@@ -561,4 +698,18 @@ int open_disk_file(file_entry_t *file, int flags, mode_t mode)
         fail_with_error("FATAL: open() failed");
 
     return fd;
+}
+
+/* Finds the record for the client's file state for the given
+file. */
+file_state_t *find_fstate(client_t *client, file_entry_t *file)
+{
+    for (int i = 0, end = client->fstates.size; i < end; ++i) {
+        file_state_t *fstate = (file_state_t*)list_at(&client->fstates, i);
+        if (file == fstate->file) {
+            return fstate;
+        }
+    }
+
+    return (file_state_t*)0;
 }
