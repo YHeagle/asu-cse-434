@@ -64,167 +64,177 @@ int main(int argc, char **argv)
 
     // Open script
     Script = fopen(argv[5],"r");
-    incarnationFile = fopen('/home/Skylor/incarnationFile.txt',"rw");
+    incarnationFile = fopen("/home/Skylor/incarnationFile.txt","rw");
 
     // Initialize variables to be stored from script
-    char    command;    // Script command
-    char    filename;   // Filename associated with script command
-    char    mode;       // Mode of the open operation
-    int     bytes;      // Number of bytes associated with certain script commands
-    char    string;     // String associated with certain script command
-    char    operation;  // Full operation code sent to the server including command and arguments
-    int     requestNumber = 0; // Updated to count the number of requests sent to the server
-
-
-
-
-   
+    char    command[100];       // Script command
+    char    filename[80];       // Filename associated with script command
+    char    mode[10];           // Mode of the open operation
+    char    bytes[10];          // Number of bytes associated with certain script commands
+    char    string[100];        // String associated with certain script command
+    char    operation[200];     // Full operation code
+    int32_t requestNumber;
+    unsigned int fromSize;      // In-out of address size for recvfrom()
+    int FileLockStringLen;                  // Length of string to FileLock
    
    // Reads script file to send commands to the server
-    for (command = getc(Script); command != EOF; command = getc(Script))
+    for (requestNumber = 0; fscanf(Script,"%s",command) != EOF; requestNumber++)
     {
         if (command == "open")  // Open command
         {
 
             // Searches and stores the filename and mode variables
-            filename = getc(Script);
-            mode = getc(Script);
+            fscanf(Script,"%s",filename);
+            fscanf(Script,"%s",mode);
 
 
             // Creates a string that holds the message to be sent to the server
-            operation = command + " " + filename + " " + mode;
+            strcat (operation, " ");
+            strcat (operation, filename);
+            strcat (operation, " ");
+            strcat (operation, mode);
+            //printf("contents of operation: %s\n",operation);
+
 
             // Creates a request
             request_t request;
             strcpy(request.machine, argv[2]);
             strcpy(request.operation, operation);
             request.client = atoi(argv[3]);
-            request.request = atoi(requestNumber);
+            request.request = requestNumber;
 
             // Sends the request and tuple to the server
             if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                &server_address, sizeof(server_address)) != sizeof(request_t))
             fail_with_error("sendto() sent a different number of bytes than expected");
 
-            // Increments the request number
-            requestNumber = requestNumber + 1;
 
         }
 
         if (command == "close") // Close command
         {
 
-            // Searches and stores the filename and mode variables
-            filename = getc(Script);
+            // Searches and stores the filename variables
+            fscanf(Script,"%s",filename);
+
 
             // Creates a string that holds the message to be sent to the server
-            operation = command + " " + filename;
+            strcat (operation, " ");
+            strcat (operation, filename);
+            //printf("contents of operation: %s\n",operation);
+
 
             // Creates a request
             request_t request;
             strcpy(request.machine, argv[2]);
             strcpy(request.operation, operation);
             request.client = atoi(argv[3]);
-            request.request = atoi(requestNumber);
+            request.request = requestNumber;
 
             // Sends the request and tuple to the server
             if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                &server_address, sizeof(server_address)) != sizeof(request_t))
             fail_with_error("sendto() sent a different number of bytes than expected");
-
-            // Increments the request number
-            requestNumber = requestNumber + 1;        
+       
 
         }
 
         if (command == "read")  // Read command
         {
            
-            // Searches and stores the filename and mode variables
-            filename = getc(Script);
-            bytes = getw(Script);
+            // Searches and stores the filename and bytes variables
+            fscanf(Script,"%s",filename);
+            fscanf(Script,"%d",bytes);
 
 
             // Creates a string that holds the message to be sent to the server
-            operation = command + " " + filename + " " + bytes;
+            strcat (operation, " ");
+            strcat (operation, filename);
+            strcat (operation, " ");
+            strcat (operation, bytes);
+            //printf("contents of operation: %s\n",operation);
+
 
             // Creates a request
             request_t request;
             strcpy(request.machine, argv[2]);
             strcpy(request.operation, operation);
             request.client = atoi(argv[3]);
-            request.request = atoi(requestNumber);
+            request.request = requestNumber;
 
             // Sends the request and tuple to the server
             if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                &server_address, sizeof(server_address)) != sizeof(request_t))
             fail_with_error("sendto() sent a different number of bytes than expected");
 
-            // Increments the request number
-            requestNumber = requestNumber + 1;
 
         }
 
         if (command == "write") // Write command
         {
             
-            // Searches and stores the filename and mode variables
-            filename = getc(Script);
-            string = getc(Script);
+            // Searches and stores the filename and string variables
+            fscanf(Script,"%s",filename);
+            fscanf(Script,"%s",string);
 
 
             // Creates a string that holds the message to be sent to the server
-            operation = command + " " + filename + " " + string;
+            strcat (operation, " ");
+            strcat (operation, filename);
+            strcat (operation, " ");
+            strcat (operation, string);
+            //printf("contents of operation: %s\n",operation);
+
 
             // Creates a request
             request_t request;
             strcpy(request.machine, argv[2]);
             strcpy(request.operation, operation);
             request.client = atoi(argv[3]);
-            request.request = atoi(requestNumber);
+            request.request = requestNumber;
 
             // Sends the request and tuple to the server
             if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                &server_address, sizeof(server_address)) != sizeof(request_t))
             fail_with_error("sendto() sent a different number of bytes than expected");
 
-            // Increments the request number
-            requestNumber = requestNumber + 1;
 
         }
 
         if (command == "lseek") // Lseek command
         {
             
-            // Searches and stores the filename and mode variables
-            filename = getc(Script);
-            bytes = getc(Script);
+           // Searches and stores the filename and bytes variables
+            fscanf(Script,"%s",filename);
+            fscanf(Script,"%d",bytes);
 
 
             // Creates a string that holds the message to be sent to the server
-            operation = command + " " + filename + " " + bytes;
+            strcat (operation, " ");
+            strcat (operation, filename);
+            strcat (operation, " ");
+            strcat (operation, bytes);
+            //printf("contents of operation: %s\n",operation);
+
 
             // Creates a request
             request_t request;
             strcpy(request.machine, argv[2]);
             strcpy(request.operation, operation);
             request.client = atoi(argv[3]);
-            request.request = atoi(requestNumber);
+            request.request = requestNumber;
 
             // Sends the request and tuple to the server
             if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                &server_address, sizeof(server_address)) != sizeof(request_t))
             fail_with_error("sendto() sent a different number of bytes than expected");
 
-            // Increments the request number
-            requestNumber = requestNumber + 1;
-
         }
 
         else    // Fail command
         {
             int fail = 1;
-            fprintf(incarnationNumber,"%d",fail);
+            fprintf(incarnationFile,"%d",fail);
         }
         // End of command cases
 
@@ -240,7 +250,7 @@ int main(int argc, char **argv)
     fromSize = sizeof(server_address);
     if ((respStringLen = recvfrom(sock, FileLockBuffer, FileLockMAX, 0, 
          (struct sockaddr *) &server_address, &fromSize)) != FileLockStringLen)
-        DieWithError("recvfrom() failed");
+        fail_with_error("recvfrom() failed");
 
     // Null-terminates the received data
     FileLockBuffer[respStringLen] = '\0';
@@ -249,7 +259,7 @@ int main(int argc, char **argv)
 
 
     // Time out for server response
-    else if (setsockopt(rcv_sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0)
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0)
             { 
                 perror("Error: Server response timed Out..");
             }
