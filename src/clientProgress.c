@@ -164,7 +164,7 @@ int main(int argc, char **argv)
             request.request = requestNumber;
 
 
-            if (command == "fail")
+            if (strcmp(command,"fail") == 0)
             {
                 // Lock the file
                 fd = open(incarnationFile, O_WRONLY);
@@ -192,13 +192,12 @@ int main(int argc, char **argv)
 
 
             // Sends the request and tuple to the server
-            if (command != "fail")
+            if (strcmp(command,"fail") == 1)
             {
                
                 if (sendto(sock, &request, sizeof(request_t), 0, (struct sockaddr *)
                  &server_address, sizeof(server_address)) != sizeof(request_t))
                 fail_with_error("sendto() sent a different number of bytes than expected");
-
 
                 // Recieves a response from the server
                 fromSize = sizeof(server_address);
